@@ -1,0 +1,467 @@
+---
+title: "Kaggle Survey Results"
+author: "Deepak Kumar G S"
+date: "November 7, 2017"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+  
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE,message=FALSE)
+```
+
+# Introduction 
+
+* For the first time, Kaggle conducted an industry-wide survey to establish a comprehensive view of the state of data science and machine learning. The survey received over 16,000 responses and it gave a ton of information  about who is working with data, what's happening at the cutting edge of machine learning across industries, and how new data scientists can best break into the field.
+
+* We try to explore this dataset and find out from respondents some interesting trends and summarise the results.In some cases,I also intend to do some modelling if there is scope for classification or differentiation between the groups.
+
+# Loading the dataset:
+
+```{r}
+library(plyr)
+library(tidyverse)
+library(plotly)
+library(ggplot2)
+library(ggthemes)
+library(viridis)
+library(scales)
+library(cowplot)
+library(wordcloud2)
+library(splitstackshape)
+library(RColorBrewer)
+library(reshape2)
+library(wordcloud)
+library(kableExtra)
+library(knitr)
+library(plotrix) #3dPie
+library(stringr)
+survey=read_csv("multipleChoiceResponses.csv",col_names=TRUE)
+head(survey,5)
+```
+
+
+# Survey Diversity {.tabset .tabset-pills}
+
+Let us understand the respondents background-Gender,Employment,Country,Age etc in detail.
+
+## Gender
+
+```{r,fig.width=7,fig.height=8}
+class(survey$GenderSelect)
+gender=c("Male","Female","Different Identity","Non-binary, genderqueer, or gender non-conforming")
+survey$GenderSelect=factor(survey$GenderSelect,levels=gender) %>% droplevels()
+temp=survey %>% group_by(GenderSelect)  %>% drop_na(GenderSelect)%>% summarise(count=n()) %>% mutate(perc=percent(count/sum(count)))
+ggplot(temp,aes(GenderSelect,count,fill=GenderSelect))+geom_bar(stat="identity")+labs(x="Gender",y="Count",title="Distribution of Gender",caption="Source:Kaggle ML and DataScience Survey2017")+geom_text(aes(label=perc),color="black",fontface="bold",vjust=0.5)+theme_fivethirtyeight()+theme(plot.title=element_text(hjust=0.5),legend.title=element_text(hjust=0.5,face="bold"),legend.position="none",axis.text.x=element_text(angle=90))
+```
+
+82 % of the respondends are male.
+
+## Age Distribution
+
+```{r}
+cat("There are",sum(is.na(survey$Age)),"NA values in Age")
+temp=subset(survey,!is.na(survey$Age) & !is.na(survey$GenderSelect))
+ggplot(temp,aes(Age))+geom_histogram(aes(fill="green"),col="black",binwidth=2,alpha=0.5)+labs(title="Histogram of Age Distribution",x="Age",y="Count",caption="Source:Kaggle ML and DataScience Survey2017")+theme_classic()+theme(legend.position="none")
+```
+
+* The graph seems to be skewed towards right which means that the median value is around 25 and the mean is greater than 25.Let us plot the summary statistics of the Age with respect to gender.
+
+## Age Distribution by Gender
+
+```{r}
+ggplot(temp,aes(GenderSelect,Age))+geom_boxplot(aes(fill=factor(GenderSelect)))+labs(x="Gender",y="Age",title="Genderwise age distribution",caption="Source:Kaggle ML and DataScience Survey2017")+theme_pander()+theme(legend.position="none",plot.title=element_text(hjust=0.5))
+```
+
+
+There seems to be a moderate difference in median age between the genders as evident from the boxplot.Another point to note here is that there are outliers with age mentioned 100  and 0.
+
+## Location of Respondents
+
+```{r,fig.height=7}
+sum(is.na(survey$Country))
+temp=survey %>% drop_na(Country) %>% group_by(Country) %>% summarise(count=n()) %>% arrange(desc(count))
+ggplot(head(temp,20),aes(reorder(Country,count),count,fill=Country))+geom_bar(stat="identity")+theme(legend.position="none",plot.title=element_text(size=12,face="bold",vjust=0.5),axis.text.x = element_text(angle=90))+labs(x="",y="Count",title="Distribution of Respondents of Survey",caption="Source:Kaggle ML and DataScience Survey")+coord_flip()
+```
+
+The population of the survey consist of majority from India and United States.
+
+##Formal Education
+
+Let us know about the survey diversity interms of education status.
+
+```{r}
+temp=survey %>% filter(!is.na(FormalEducation)) %>% group_by(FormalEducation) %>% tally() %>% arrange(desc(n))
+temp$Perc=round((prop.table(temp$n))*100,2)
+colnames(temp)=c("FormalEducation","Count","Perc")
+kable(temp,"html") %>% kable_styling(bootstrap_options="hover",full_width=F) %>% row_spec(4:7,bold=T,color="white",background="#D7261E")
+temp[4:7,1]="Other"
+temp=temp %>% group_by(FormalEducation) %>%  summarise(count=sum(Count)) %>% arrange(desc(count))
+temp$Perc=round((prop.table(temp$count))*100,2)
+lbls=paste(temp$FormalEducation,temp$Perc,"%",sep=" ")
+pie3D(temp$Perc,labels=lbls,labelcex=1,explode=0.25,col=brewer.pal(3,"Accent"),main="Education Qualification..",radius=1.5,mar=c(1,1,1,1))
+```
+
+41.7 % of our respondends have masters degree while 32 % of them have completed their Bachelors.
+
+Let us know about their majors.
+
+```{r}
+temp=survey %>% filter(!(is.na(MajorSelect))) %>% group_by(MajorSelect) %>% tally() %>% arrange(desc(n))
+temp$Perc=round((prop.table(temp$n))*100,2)
+colnames(temp)[2]="Count"
+kable(temp,"html") %>% kable_styling(bootstrap_options="hover",full_width=F) %>% row_spec(5:15,bold=T,color="white",background="#D7261E")
+temp[5:15,1]="Other"
+temp=temp %>% group_by(MajorSelect) %>%  summarise(count=sum(Count)) %>% arrange(desc(count))
+temp$Perc=round((prop.table(temp$count))*100,2)
+lbls=paste(temp$MajorSelect,temp$Perc,"%")
+pie3D(temp$Perc,labels=lbls,labelcex=1,explode=0.45,radius=1.4,col=brewer.pal(3,"Accent"),main="Majors")
+```
+
+
+33% of them have completed Computer Science while 30 % of the respondends have their majors in either one of the areas mentioned in the table highlighted in red.
+
+#Career and Employment Related{.tabset .tabset-pills}
+
+
+## Employment Status of Respondents
+
+We take the employment status of the respondents of the survey and try to find out the distribution across the gender.
+
+```{r}
+cat("There are ",sum(is.na(survey$EmploymentStatus)) ,"NA Values in Employment Status columns")
+```
+
+
+
+```{r,fig.width=10,fig.height=10,fig.align='center'}
+class(survey$EmploymentStatus)
+survey$EmploymentStatus=factor(survey$EmploymentStatus) 
+temp=survey %>% select(GenderSelect,EmploymentStatus) %>%drop_na(GenderSelect,EmploymentStatus)%>% group_by(EmploymentStatus,GenderSelect) %>% summarise(count=n()) %>% arrange(desc(count)) %>% mutate(perc=percent(count/sum(count)))
+ggplot(temp,aes(EmploymentStatus,count,fill=GenderSelect,label=perc))+geom_bar(stat="identity")+theme(legend.position="bottom",plot.title=element_text(size=14,face="bold",vjust=0.5),axis.text.x = element_text(angle=90,hjust=0.5))+labs(x="EmploymentType",y="Count",title="Employement Status of Respondents",subtitle="Gender Distribution considered",caption="Source:Kaggle ML & DataScience Survey")+geom_text(size=3,position=position_stack(vjust=0.5))+scale_x_discrete(labels=function(x)str_wrap(x,width=15))
+```
+
+
+
+A major respondents of the survey are employed or not employed.But the difference in the representation is huge between them.
+
+
+From the respondents of the survey,We understand that 84% are male and employed where as 15 % are employed and represent female.This is followed by unemployed people looking for work where males represent 77 %  while females form 22 % .
+
+Let us see from which country do these employed and unemployed people belong to and thereby we could infer which country has more opportunities for a data scientist.
+
+## Destination of Employed and Unemployed People
+
+```{r,fig.width=7,fig.height=10}
+emp=survey %>% select(EmploymentStatus,Country) %>% drop_na(EmploymentStatus,Country) %>% filter(EmploymentStatus=="Employed full-time") %>% group_by(Country) %>% summarise(count=n()) %>% mutate(perc=round((count/sum(count))*100,2)) %>% arrange(desc(count)) 
+unemp=survey %>% select(EmploymentStatus,Country) %>% drop_na(EmploymentStatus,Country) %>% filter(EmploymentStatus=="Not employed, but looking for work") %>% group_by(Country) %>% summarise(count=n()) %>% mutate(perc=round((count/sum(count))*100,2))%>% arrange(desc(count)) 
+
+
+#Visualizing the top 10
+p=ggplot(head(emp,10),aes(factor(Country,levels=Country),perc,fill=Country,label=paste(perc,"%")))+geom_bar(stat="identity")+theme(legend.position="none",plot.title=element_text(size=12,face="bold",vjust=0.5),axis.text.x = element_text(angle=90))+labs(x="",y="Percentage",title="Distribution of Employeed People",subtitle="Top 10 Destination of employed people")+geom_text(position=position_stack(vjust=0.5),size=2)
+q=ggplot(head(unemp,10),aes(factor(Country,levels=Country),perc,fill=Country,label=paste(perc,"%")))+geom_bar(stat="identity")+theme(legend.position="none",plot.title=element_text(size=12,face="bold",vjust=0.5),axis.text.x = element_text(angle=90))+labs(x="",y="Percentage",title="Distribution of UnEmployeed People",subtitle="Top 10 Destination of Unemployed people")+geom_text(position=position_stack(vjust=0.5),size=2)
+plot_grid(p,q,ncol=1)
+```
+
+
+27 % of the employed people are represented by United States followed by India. 27 % of the unemployed people responded in the survey belong to India followed by United States.
+
+
+## Career change %
+
+What percentage of people are looking for career change?
+
+```{r,fig.height=15,fig.width=10}
+temp=survey %>% drop_na(CareerSwitcher)
+temp=ddply(temp,.(EmploymentStatus,CareerSwitcher),summarise,count=n())
+temp$Perc=round(prop.table(temp$count)*100,2)
+ggplot(temp,aes(EmploymentStatus,Perc,fill=CareerSwitcher,label=paste(Perc,"%")))+geom_bar(stat="identity")+theme_solarized_2()+theme(legend.position="bottom",plot.title=element_text(size=20,face="bold",family="Arial"),axis.text.x=element_text(angle=90,vjust=0.5,size=20))+labs(x="",y="",title="Searching for Opportnities.....")+geom_text(position=position_stack(vjust=0.5),size=5)+scale_x_discrete(labels=function(x)str_wrap(x,width=15))
+
+
+```
+
+In every type of employment,we find that there is substantial number of people aspiring for career change into data analytics.But there seems to be a wrong responses by retired people where 0.33 % are looking for career change!!!!!.We neglect this number.
+
+
+
+
+## Job Title
+
+What is the current job title of the aspiring career changers?
+
+```{r}
+temp=survey %>% select(CareerSwitcher,CurrentJobTitleSelect) %>% filter(CareerSwitcher=="Yes") %>% drop_na(CurrentJobTitleSelect)  %>% group_by(CurrentJobTitleSelect) %>% summarise(count=n()) %>% arrange(desc(count)) 
+temp$Perc=round((prop.table(temp$count))*100,2)
+ggplot(temp,aes(reorder(CurrentJobTitleSelect,Perc),Perc,fill=CurrentJobTitleSelect,label=paste(Perc,"%")))+geom_bar(stat="identity")+theme(legend.position="none",plot.title=element_text(size=15,face="bold"),axis.text.x=element_text(angle=90,vjust=0.5,size=14),plot.subtitle=element_text(hjust=0.8))+labs(x="",y="",title="What aspiring data scientists do ???",subtitle="A diverse look at what is the job title of aspiring data scientists..")+geom_text(position=position_stack(vjust=0.5),size=3)+scale_color_viridis(discrete=T,option="B")+coord_flip()
+#temp=survey %>% select(CurrentJobTitleSelect) %>% drop_na(CurrentJobTitleSelect) %>% group_by(CurrentJobTitleSelect) %>% summarise(freq=n())
+#visit https://cran.r-project.org/web/packages/wordcloud2/vignettes/wordcloud.html .
+#wordcloud2(temp,size=0.4,color="random-light",backgroundColor = "grey",shape='star')
+```
+
+## Machine Learning Skills @Work
+
+```{r}
+temp=survey %>% filter(!(is.na(MLSkillsSelect))) %>% select(MLSkillsSelect)
+temp=cSplit(temp,"MLSkillsSelect",sep=",",direction="long",drop=TRUE)
+temp=ddply(temp,.(MLSkillsSelect),summarise,count=n())
+temp$perc=round((prop.table(temp$count))*100,2)
+temp=temp %>% arrange(desc(count))
+ggplot(temp,aes(reorder(MLSkillsSelect,perc),perc,fill=MLSkillsSelect,label=paste(perc,"%")))+geom_bar(stat="identity")+theme(legend.position="none",plot.title=element_text(size=15,face="bold"),axis.text.x=element_text(angle=90,vjust=0.5,size=14),plot.subtitle=element_text(hjust=0.8))+labs(x="",y="",title="MachineLearning Skills",subtitle="Which Technique is most used at workplace??")+geom_text(position=position_stack(vjust=0.5),size=3)+coord_flip()
+```
+
+
+
+
+#Years of Study {.tabset .tabset-pills}
+
+##Time Taken to learn DataScience
+How long it takes to learn Data Science??
+
+We compare the data with current job title of respondents and the learning time.
+
+```{r}
+temp=survey %>% select(CurrentJobTitleSelect,LearningDataScienceTime) %>% filter(!is.na(CurrentJobTitleSelect) & !is.na(LearningDataScienceTime))
+length(unique(temp$CurrentJobTitleSelect))
+length(unique(temp$LearningDataScienceTime))
+temp=temp %>% rename(Jobtitle=CurrentJobTitleSelect,years=LearningDataScienceTime) %>% group_by(Jobtitle,years) %>% summarise(count=n())
+temp$years=factor(temp$years)
+ggplotly(ggplot(temp,aes(years,count,fill=Jobtitle))+geom_bar(stat="identity")+theme(legend.position="none",axis.text.x=element_text(angle=90),plot.title=element_text(size=10,hjust=0.5),plot.subtitle=element_text(size=10,family="sans"))+labs(x="",y="No.of.Respondends",title="Job title Vs Learning Time",subtitle="Time for learning data science"))
+```
+
+From the graph,we understand that a majority of people across the job title have responded that they learn data science within <1 year.Does this correlate with study hours??
+
+## Study Hours Vs Data Science Learning time
+
+```{r,fig.width=6,fig.height=9,fig.align="center"}
+temp=survey %>% select(LearningDataScienceTime,TimeSpentStudying) %>% drop_na() %>% rename(years=LearningDataScienceTime,Time=TimeSpentStudying)
+temp=temp %>% group_by(years,Time) %>% tally(sort=T)
+length(unique(temp$Time))
+ggplot(temp,aes(years,n,fill=years))+geom_bar(stat="identity")+facet_wrap(~Time,scales="free")+theme_economist_white()+theme(legend.position="none",axis.text.x=element_text(angle=90,vjust=0.5))+labs(x=" No.Years of Study",y="Count",title="Study Hrs Vs Data Science Learning Time")
+```
+
+
+People who study for 2-10 hrs every day and below that range have learnt data science <1 year whereas people who put in 40 + hours have actually taken 1-2 years to grasp the subject..!!! I may have interpreted this wrong or this might be the exact scenario.Either that people who have already into the field or related to that field could have found it easier that with less effort and practise they are able to master the skills or that since the dataset is randomly represented,this is not accurate.
+
+# Machine Learning Related {.tabset .tabset-pills}
+
+## Popular Machine Learning Tool  
+
+Let us create a wordcloud to visualize which tool respondends intend to study next year.
+
+```{r}
+
+temp=survey %>% select(MLToolNextYearSelect) %>% drop_na() %>% group_by(MLToolNextYearSelect) %>% summarise(freq=n()) %>% arrange(desc(freq))
+wordcloud2(temp,size=0.4,color="random-light",minRotation = -pi/3,maxRotation = pi/2,rotateRatio = 1,minSize = 2,backgroundColor = 'lightgrey')
+```
+
+Tensor Flow seems to be the most popular tool among the respondends followed by Python.
+
+## Popular Machine Learning Method
+
+```{r,fig.height=11}
+temp=survey %>% select(MLMethodNextYearSelect) %>% drop_na() %>% group_by(MLMethodNextYearSelect) %>% summarise(freq=n()) %>% arrange(desc(freq))
+ggplot(temp,aes(factor(MLMethodNextYearSelect,levels=MLMethodNextYearSelect),freq,fill=MLMethodNextYearSelect))+geom_bar(stat="identity")+theme(legend.position="none",axis.text.x=element_text(angle=90,hjust=0.5),plot.title=element_text(hjust=0.5,size=20,family='sans'))+labs(x="",y="",title="Popular Machine Learning Method",caption="Source:Kaggle ML and DataScience Survey")+scale_x_discrete(labels=function(x)str_wrap(x,width=20))
+```
+
+Deep Learning,Neural Net ,Time Series are the popular machine learning methods of the respondents.The difference is huge between the use of deep learning and neural nets.
+
+#Survey Response related to Learning {.tabset .tabset-pills}
+
+## Learning Platform 
+
+Let us examine which learning platform is prefered by our respondends.
+
+```{r}
+temp=cSplit(survey,"LearningPlatformSelect",sep=",",direction="long")
+sum(is.na(temp$LearningPlatformSelect))
+temp=ddply(temp,.(LearningPlatformSelect),dplyr::summarize,freq=n())
+temp=temp[complete.cases(temp),]
+my_palette = c(brewer.pal(5, "Set1"), brewer.pal(5, "Pastel1"))
+wordcloud2(temp,size=0.4,backgroundColor = "grey",minSize = 0.1,minRotation = -pi/5,maxRotation = pi/5,color=my_palette)
+```
+
+
+## Software Preference 
+
+Which software is popular among our respondends?
+
+```{r}
+temp=survey %>% select(LanguageRecommendationSelect) %>% group_by(LanguageRecommendationSelect)  %>% drop_na() %>% summarise(count=n()) %>% mutate(perc=round((count/sum(count))*100,2))%>% arrange(desc(count))
+ggplot(temp,aes(factor(LanguageRecommendationSelect,levels=LanguageRecommendationSelect),perc,fill=LanguageRecommendationSelect,label=paste(perc,"%")))+geom_bar(stat="identity")+labs(x="",y="Percentage",title="Popularity of Software",caption="Source:Kaggle ML and DataScience Survey",subtitle="Obsession with Software...")+theme_fivethirtyeight()+theme(legend.position="none",axis.text.x=element_text(angle=90,vjust=0.5),plot.title=element_text(size=10,hjust=0.5))+geom_text(position=position_stack(vjust=0.5),size=2)
+```
+
+
+Not surprising,Python leads the pack with more than 50 % of the respondents prefering it followed by another open source software R with 25 % .The popularity of the tools indicate that people are opting for open source tools compared to licenced softwares.
+
+## DataSet Source
+
+Almost all respondents have given more than one option on the platform for dataset analysis.Therefore we use Csplit option to list down one entry each row and then aggregate it to know about the popular platforms.
+
+```{r,fig.width=10,fig.height=8}
+temp = survey %>% select(PublicDatasetsSelect)
+temp=cSplit(temp,"PublicDatasetsSelect",direction="long",drop=TRUE,sep=",")
+temp=ddply(temp,.(PublicDatasetsSelect),summarise,count=n())
+temp=temp[!is.na(temp$PublicDatasetsSelect),]
+temp= temp %>% mutate(perc=round((count/sum(count))*100,2)) %>% arrange(desc(count))
+ggplot(temp,aes(factor(PublicDatasetsSelect,levels=PublicDatasetsSelect),perc,fill=PublicDatasetsSelect,label=paste(perc,"%")))+geom_bar(stat="identity")+labs(x="",y="Percentage",title="DataAggregation Platform",caption="Source:Kaggle ML and DataScience Survey",subtitle="Which platform is prefered ..")+theme_fivethirtyeight()+theme(legend.position="none",axis.text.x=element_text(angle=90,vjust=0.5),plot.title=element_text(size=15,hjust=0.5))+geom_text(position=position_stack(vjust=0.5),size=2)+coord_flip()
+```
+
+While 32 % of the respondents prefer Socrata/Kaggle/Data.word aggregator platforms,almost half of this percentage of people use Google to find the datasets.
+
+## Usefulness of Learning Platform
+
+I am going to make a subset of the dataframe to extract only learning usefulness of each platform.I call the dataframe temp and I read the column names.
+
+```{r}
+temp=survey[,17:34]
+colnames(temp)
+```
+
+
+Converting the long column names into simple names!!!
+
+```{r}
+#names=c("Arxiv","Blog","College","Company","Conferences","Friends","Kaggle","Newsletters","Communities","Documentation","Courses","Projects","Podcasts","SO","Textbook","Tradebook","Tutoring","Youtube")
+names=sapply(colnames(temp),function(x)gsub('LearningPlatformUsefulness'," ",x))
+colnames(temp)=names
+colnames(temp)
+
+```
+
+The column names seems OK now.Lets understand the dataframe.
+
+```{r}
+glimpse(temp)
+```
+
+
+Now going by the structure every column is a character type data.We convert it into factor.For this we need to check how many unique responses are there in the dataframe.If they are same,we assign levels and apply to all.
+
+```{r}
+temp[is.na(temp)]="Not responded"
+unique(temp$Arxiv)
+lapply(temp,function(x)length(table(x)))
+```
+
+There are 4 unique levels in each column.Now lets convert the columns to factor.
+
+```{r}
+level=c("Not responded","Very useful","Somewhat useful","Not Useful")
+temp[]=lapply(temp[],function(x) factor(x,levels=level))
+lapply(temp,class)
+```
+
+
+
+Now we come to the part where we visualize the dataframe and get to know about the usefulness rating of the platforms.
+
+```{r,fig.width=15,fig.height=7}
+temp=cbind(temp,survey$LearningPlatformSelect)
+colnames(temp)[19]="LearningPlatform"
+temp=melt(temp,id.vars="LearningPlatform",value.name="Usefulness")
+temp$LearningPlatform=NULL
+colnames(temp)[1]="Platform"
+temp=subset(temp,temp$Usefulness !="Not responded")
+temp=ddply(temp,.(Platform,Usefulness),summarise,count=n())
+ggplot(temp,aes(Usefulness,count,fill=Usefulness))+geom_bar(stat="identity")+facet_grid(.~Platform ,scales="free")+theme(legend.position="none",axis.text.x=element_text(angle=90,vjust=0.5),plot.title=element_text(size=15,hjust=0.5))+labs(x="",y="",title="Usefulness rating for each Platform",subtitle="Which Platform has higher rating?")
+```
+
+
+
+Kaggle,Online courses,Projects,Textbooks have been rated higher in terms of learning usefulness while youtube,blogs,Conferences have been rated as somewhat useful by respondents.
+
+##Blogs & Podcasts 
+
+Let us know about the popularity of blogs and podcasts.
+
+```{r}
+temp=survey[,"BlogsPodcastsNewslettersSelect"]
+colnames(temp)="BlogPodcast"
+temp=subset(temp,temp$BlogPodcast!="")
+temp=cSplit(temp,"BlogPodcast",direction="long",sep=",")
+temp=temp %>% group_by(BlogPodcast) %>% summarise(freq=n())
+temp=temp %>% arrange(desc(freq))
+par(bg="black")
+wordcloud(temp$BlogPodcast,temp$freq,scale=c(2,0.1),min.freq=100,max.words = 25,random.order=TRUE,random.color=TRUE,rot.per=0.5,col=terrain.colors(length(temp$BlogPodcast),alpha=1))
+```
+
+KDNuggets Blog,R bloggers,O'Reilly Newsletters,Becoming datascientist podcasts seem popular among the respondends.
+
+## Job Skill Importance:
+
+As we did earlier for learning platform usefullness we try to explore in the aspect of JobSkill importance.
+
+```{r}
+which(colnames(survey)=="JobSkillImportanceBigData")
+which(colnames(survey)=="JobSkillImportanceOtherSelect3")
+temp=survey[,37:49]
+names=sapply(colnames(temp),function(x) gsub("JobSkillImportance","",x))
+colnames(temp)=names
+glimpse(temp)
+```
+
+Converting to factors as done earlier,
+
+```{r}
+cat("The columns ",colnames(temp[,11:13]),"have",length(is.na(temp$OtherSelect1)),length(is.na(temp$OtherSelect2)),length(is.na(temp$OtherSelect3)),"NA values respectively")
+temp[,11:13]=NULL
+unique(temp$BigData)
+lapply(temp,function(x)length(table(x)))
+```
+
+There are 4 unique levels in each column.Now lets convert the columns to factor.
+
+```{r}
+level=c("Not responded","Necessary","Nice to have","Unnecessary")
+temp[]=lapply(temp[],function(x) factor(x,levels=level))
+lapply(temp,class)
+```
+
+
+
+Now we come to the part where we visualize the dataframe and get to know about the usefulness rating of the platforms.
+
+```{r,fig.width=15,fig.height=7}
+temp=cbind(temp,survey$LearningPlatformSelect)
+colnames(temp)[11]="LearningPlatform"
+temp=melt(temp,id.vars="LearningPlatform",value.name="Usefulness")
+temp$LearningPlatform=NULL
+colnames(temp)[1]="Skill"
+temp=subset(temp,temp$Usefulness !="Not responded")
+temp=ddply(temp,.(Skill,Usefulness),summarise,count=n())
+ggplot(temp,aes(Usefulness,count,fill=Usefulness))+geom_bar(stat="identity")+facet_grid(.~Skill ,scales="free")+theme(legend.position="none",axis.text.x=element_text(angle=90,vjust=0.5),plot.title=element_text(size=15,hjust=0.5))+labs(x="",y="",title="Job Skill Importance",subtitle="Which Skill is good to have?")
+```
+
+> Stats,Python is the necessary skill to have for a successfull datascience career followed by Kaggle Ranking,Big Data,Degree,R and others.
+
+## Course Platform Popularity
+
+We use csplit from *splitstackshape package* and perform the analysis.
+
+```{r}
+#which(colnames(survey)=="CoursePlatformSelect")
+temp=survey[,50]
+temp=cSplit(temp,"CoursePlatformSelect",sep=",",direction="long",drop=TRUE)
+temp=temp[which(!is.na(temp$CoursePlatformSelect)),]
+temp=ddply(temp,.(CoursePlatformSelect),summarise,count=n())
+colnames(temp)[1]="MOOC"
+temp$Perc=round((prop.table(temp$count))*100,2)
+ggplot(temp,aes(reorder(MOOC,Perc),Perc,fill=MOOC,label=paste(Perc,"%")))+geom_bar(stat="identity")+theme(legend.position="none",axis.text.x=element_text(angle=90,vjust=0.5),plot.title=element_text(face="bold",size=15,color="red"))+labs(x="",y="",title="Preference of MOOC among respondents",subtitle="Popularity of MOOC")+coord_flip()+geom_text(position=position_stack(vjust=0.5),size=5)
+```
+
+
+Coursera is prefered by many with a response rate of 40 % followed by Udacity with 19 %.
+
+
+# Conclusion:
+
+* Thus,we have learnt and mined a lot of information from this survey response data of the Kaggle.
+* As a sexiest job of the 21st century,it is not a surprise that many young people are entering into this ever growing field with dreams of making it big and kaggle has done the right thing to run a survey which could help these begineers to get to know of what are the technologies that pays more,what is the typical time taken for learning,what is the diversity and many more questions have been answered...
+* Its my personal advice to begineers that the market buzz many be data science and analytics today and can be replaced by anyother technology tomorrow in this fast paced world.But what drives us is the ** relentless passion** to learn more and getting hands on with these technologies if you want to make it big in any field irrespective of the buzz.
+* On the other hand ,though i have analysed only one part of the survey data,due to time constraints i couldn't complete analysing the other data files which is a downside.I can tell you that as i find time i will try to add those files too and do an analysis.
+
+* Finally **All the best to all aspiring and growing data scientists and analysts**.Thanks for reading.
+
